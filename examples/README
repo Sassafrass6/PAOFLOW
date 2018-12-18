@@ -1,0 +1,27 @@
+example01 : Si with spd pseudpotential
+example02 : Al with spd pseudpotential
+example03 : Pt with lsda (nspin = 2)
+example04 : Fe non collinear with spin orbit - Anomalous Hall conductivity
+example05 : Pt non collinear with spin orbit - Spin Hall conductivity
+example06 : AlP with non self consistent ACBN0
+example07 : Al starting from projections with overlap matrix of the atomic orbital (prior to orthogonalization)
+
+Simply run all the tests: 
+python run_test.py
+
+This is equivalent to:
+python run_test.py 'example*' 'Reference'
+
+Specify pattern for selecting directories containing independent examples or tests:
+python run_test.py [example directory pattern] [reference directory pattern]
+
+[example directory pattern] and [reference directory pattern] are optional
+arguments and have respective default values: 'example*' and 'Reference'
+
+The reference directory must be located inside the directory containing inputfile.xml.
+
+
+Tests are verified with 'check_test.py' automatically.
+
+'check_test.py' can be run independently with:
+python check_test.py [example directory pattern] [reference directory pattern]

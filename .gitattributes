@@ -1,1 +1,1 @@
-src/externals/*
+*.py 		text diff=python

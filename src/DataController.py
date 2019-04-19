@@ -137,7 +137,7 @@ class DataController:
       print(self.data_attributes.keys())
       print('\nData Arrays:')
       print(self.data_arrays.keys())
-      print('')
+      print('\n')
 
 
   def add_default_arrays ( self ):

@@ -244,6 +244,7 @@ def _getHighSymPoints ( ibrav, alat, cellOld ):
      
   if ibrav_var=='ORC':
      band_path = 'gG-X-S-Y-gG-Z-U-R-T-Z|Y-T|U-X|S-R'
+     band_path = 'gG-X-S-Y-gG'
      special_points = {'gG'  : (0.0, 0.0, 0.0),
                'R'   : (0.5, 0.5, 0.5),
                'S'   : (0.5, 0.5, 0.0),
@@ -452,6 +453,9 @@ def _getHighSymPoints ( ibrav, alat, cellOld ):
       second = qe_conv.dot(first)
     special_points[k]=tuple((second).tolist())
 
+
+
+
   return special_points, band_path
 
 
@@ -473,7 +477,7 @@ def kpnts_interpolation_mesh ( data_controller ):
   a_vectors,b_vectors = arrays['a_vectors'],arrays['b_vectors']
   band_path,high_sym_points = attr['band_path'],arrays['high_sym_points']
 
-  bp,hsp = (band_path,high_sym_points) if len(high_sym_points)!=0 else (None,None)
+  bp,hsp = (band_path,high_sym_points) if high_sym_points.shape[1]==0 else (None,None)
 
   points,_ = get_path(ibrav,alat,a_vectors,dk,b_vectors,bp,hsp)
 
@@ -486,7 +490,7 @@ def kpnts_interpolation_mesh ( data_controller ):
   arrays['kq'] = points
 
 
-def get_path(ibrav,alat,cell,dk,b_vectors,band_path,special_points):
+def get_path(ibrav,alat,cell,dk,b_vectors,band_path,high_sym_points):
 
   def kdistance(hs, p1, p2):
     g = np.dot(hs.T, hs)
@@ -517,13 +521,13 @@ def get_path(ibrav,alat,cell,dk,b_vectors,band_path,special_points):
     raise Exception
 
   totalK=0
-  if band_path is None:
+  if band_path == '':
     special_points, band_path = _getHighSymPoints(ibrav,alat,cell)
-
-  if type(special_points) is not dict:
-    if rank == 0:
-      print('ERROR: High symmetry points must be provided in the form of a dictionary with a label as the keys and a numpy array of points as the values\n')
-    quit()
+  else:
+    special_points = {}
+    for i in range(high_sym_points.shape[0]):
+      tmp_coord = tuple(map(float,high_sym_points[i,[1,2,3]].tolist()))
+      special_points[high_sym_points[i][0]]=tmp_coord
 
   hs = np.linalg.inv(cell)  # reciprocal lattice
   #hs = 2*np.pi*bcell

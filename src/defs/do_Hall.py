@@ -23,7 +23,7 @@ from mpi4py import MPI
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
-def do_spin_Hall ( data_controller, do_ac ):
+def do_spin_Hall ( data_controller, twoD, do_ac ):
   from .perturb_split import perturb_split
   from .constants import ELECTRONVOLT_SI,ANGSTROM_AU,H_OVER_TPI,LL
 
@@ -66,7 +66,11 @@ def do_spin_Hall ( data_controller, do_ac ):
     ene,shc,Om_k = do_Berry_curvature(data_controller, jksp_is, pksp_j)
 
     if rank == 0:
-      cgs_conv = 1.0e8*ANGSTROM_AU*ELECTRONVOLT_SI**2/(H_OVER_TPI*attr['omega'])
+      if twoD:
+        av0,av1 = arry['a_vectors'][0,:],arry['a_vectors'][1,:]
+        cgs_conv = 1./(np.linalg.norm(np.cross(av0,av1))*attr['alat']**2)
+      else:
+        cgs_conv = 1.0e8*ANGSTROM_AU*ELECTRONVOLT_SI**2/(H_OVER_TPI*attr['omega'])
       shc *= cgs_conv
 
     cart_indices = (str(LL[spol]),str(LL[ipol]),str(LL[jpol]))
@@ -230,18 +234,16 @@ def do_Berry_curvature ( data_controller, jksp, pksp ):
 
   n0 = 0
   n = esize-1
-  Om_k = None
   if rank == 0:
-    Om_k = np.zeros((nk1,nk2,nk3,esize), dtype=float)
     for i in range(esize-1):
       if ene[i] <= fermi_dw and ene[i+1] >= fermi_dw:
         n0 = i
       if ene[i] <= fermi_up and ene[i+1] >= fermi_up:
         n = i
-    Om_k = np.reshape(Om_zk, (nk1,nk2,nk3,esize), order='C')
-    Om_k = Om_k[:,:,:,n]-Om_k[:,:,:,n0]
+    Om_zk = np.reshape(Om_zk, (nk1,nk2,nk3,esize), order='C')
+    Om_zk = Om_zk[:,:,:,n]-Om_zk[:,:,:,n0]
 
-  return(ene, shc, Om_k)
+  return(ene, shc, Om_zk)
 
 def do_ac_conductivity ( data_controller, jksp, pksp, ipol, jpol ):
   from .communication import gather_full

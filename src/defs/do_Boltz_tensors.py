@@ -22,7 +22,7 @@ from mpi4py import MPI
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
-def do_Boltz_tensors_no_smearing ( data_controller, temp, ene, velkp, ispin ):
+def do_Boltz_tensors ( data_controller, smearing, temp, ene, velkp, ispin ):
   # Compute the L_alpha tensors for Boltzmann transport
 
   arrays,attributes = data_controller.data_dicts()
@@ -33,7 +33,7 @@ def do_Boltz_tensors_no_smearing ( data_controller, temp, ene, velkp, ispin ):
   t_tensor = np.array([[0,0],[1,1],[2,2],[0,1],[0,2],[1,2]], dtype=int)
 
   # Quick call function for L_loop (None is smearing type)
-  fLloop = lambda spol : L_loop(data_controller, temp, None, ene, velkp, t_tensor, spol, ispin)
+  fLloop = lambda spol : L_loop(data_controller, temp, smearing, ene, velkp, t_tensor, spol, ispin)
 
   # Quick call function for Zeros on rank Zero
   zoz = lambda r: (np.zeros((3,3,esize), dtype=float) if r==0 else None)
@@ -43,41 +43,29 @@ def do_Boltz_tensors_no_smearing ( data_controller, temp, ene, velkp, ispin ):
   comm.Reduce(L0aux, L0, op=MPI.SUM)
   L0aux = None
 
-  L1 = zoz(rank)
-  L1aux = fLloop(1)
-  comm.Reduce(L1aux, L1, op=MPI.SUM)
-  L1aux = None
-
-  L2 = zoz(rank)
-  L2aux = fLloop(2)
-  comm.Reduce(L2aux, L2, op=MPI.SUM)
-  L2aux = None
-
   if rank == 0:
     # Assign lower triangular to upper triangular
     sym = lambda L : (L[0,1], L[0,2], L[1,2])
     L0[1,0],L0[2,0],L0[2,1] = sym(L0)
-    L1[1,0],L1[2,0],L1[2,1] = sym(L1)
-    L2[1,0],L2[2,0],L2[2,1] = sym(L2)
+
+  L1 = L2 = None
+  if smearing is None:
+
+    L1 = zoz(rank)
+    L1aux = fLloop(1)
+    comm.Reduce(L1aux, L1, op=MPI.SUM)
+    L1aux = None
+
+    L2 = zoz(rank)
+    L2aux = fLloop(2)
+    comm.Reduce(L2aux, L2, op=MPI.SUM)
+    L2aux = None
+
+    if rank == 0:
+      L1[1,0],L1[2,0],L1[2,1] = sym(L1)
+      L2[1,0],L2[2,0],L2[2,1] = sym(L2)
 
   return (L0, L1, L2) if rank==0 else (None, None, None)
-
-
-# Compute the L_0 tensor for Boltzmann Transport with Smearing
-def do_Boltz_tensors_smearing ( data_controller, temp, ene, velkp, ispin ):
-
-  arrays,attributes = data_controller.data_dicts()
-
-  esize = ene.size
-
-  t_tensor = arrays['t_tensor']
-
-  L0aux = L_loop(data_controller, temp, attributes['smearing'], ene, velkp, t_tensor, 0, ispin)
-  L0 = (np.zeros((3,3,esize), dtype=float) if rank==0 else None)
-  comm.Reduce(L0aux, L0, op=MPI.SUM)
-  L0aux = None
-
-  return L0
 
 
 def get_tau ( data_controller, channels ):
@@ -88,7 +76,7 @@ def get_tau ( data_controller, channels ):
 
   taus = []
   for c in channels:
-    if c == 'accoustic':
+    if c == 'acoustic':
       a_tau = np.ones((snktot), dtype=float)
       taus.append(a_tau)
 
@@ -136,7 +124,7 @@ def L_loop ( data_controller, temp, smearing, ene, velkp, t_tensor, alpha, ispin
     for l in range(t_tensor.shape[0]):
       i = t_tensor[l][0]
       j = t_tensor[l][1]
-      tau = get_tau(data_controller, ['accoustic', 'optical'])
+      tau = get_tau(data_controller, ['acoustic', 'optical'])
       L[i,j,:] += np.sum(kq_wght*tau*velkp[:,i,n,ispin]*velkp[:,j,n,ispin]*(smearA*EtoAlpha).T, axis=1)
 
   return L

@@ -50,6 +50,10 @@ def verifyData ( subdir, datPattern, refPattern ):
     # Quick function to replace directory path
     rp = lambda f, p : [r.replace(p,'') for r in f]
 
+    if len(datFiles) == 0:
+      print('\tNo output files found')
+      return
+
     # Ensure that the lists are identical
     if rp(datFiles, datFiles[0].split('/')[0]) != rp(refFiles, refFiles[0].split('/')[0]):
         print('\tList of calculated .dat files does not match reference files.')
@@ -125,9 +129,9 @@ def main():
 
     # Look for test directory pattern argument
     if len(sys.argv) > 1:
-        alldir = glob.glob(sys.argv[1])
+        alldir = sorted(glob.glob(sys.argv[1]))
     else:
-        alldir = glob.glob('example*')
+        alldir = sorted(glob.glob('example*'))
 
     # Assign default reference directory pattern, then look for argument
     datPattern = 'output'

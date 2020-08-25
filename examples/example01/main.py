@@ -30,7 +30,7 @@ def main():
   # Initialize PAOFLOW, indicating the name of the QE save directory.
   #   outputdir is named 'output' by default
   #   smearing is 'gauss' by default
-  paoflow = PAOFLOW.PAOFLOW(savedir='silicon.save', outputdir='output_silicon', smearing='gauss', npool=1, verbose=True)
+  paoflow = PAOFLOW.PAOFLOW(savedir='silicon.save', outputdir='output', smearing='gauss', npool=1, verbose=True)
   paoflow.projectability()
   paoflow.pao_hamiltonian()
 

@@ -1,20 +1,17 @@
-# PAOFLOW
-
  PAOFLOW
 
  Utility to construct and operate on Hamiltonians from the Projections of DFT wfc on Atomic Orbital bases (PAO)
 
- Copyright 2016-2017 - Marco BUONGIORNO NARDELLI (mbn@unt.edu) - AFLOW.ORG consortium
+ Copyright 2016-2020 - Marco BUONGIORNO NARDELLI (mbn@unt.edu)
 
- This package is part of AFLOW software.
-
- AFLOW is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by
+ PAOFLOW is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
  You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 
  PAOFLOW's capabilities:
 
@@ -33,11 +30,17 @@
  - spin Berry curvature and spin Hall conductivity (including spin circular dichroism spectra) 
  - Band topology (Z2 invariants, Berry and spin Berry curvature along standard paths in BZ, critical points
 
+
+Example code for PAOFLOW is available on GitHub:
+https://github.com/marcobn/PAOFLOW/examples/
+
+
  Use of PAOFLOW should reference:
 
  M. Buongiorno Nardelli, F. T. Cerasoli, M. Costa, S Curtarolo,R. De Gennaro, M. Fornari, L. Liyanage, A. Supka and H. Wang, 
  PAOFLOW: A utility to construct and operate on ab initio Hamiltonians from the Projections of electronic wavefunctions on 
  Atomic Orbital bases, including characterization of topological materials, Comp. Mat. Sci. vol. 143, 462 (2018).
+
 
  PAOFLOW is integrated in AFLOW𝛑:
 
@@ -46,6 +49,10 @@
  AFLOW𝛑: A minimalist approach to high-throughput ab initio calculations including the generation 
  of tight-binding hamiltonians, Computational Materials Science, 136 (2017) 76-84. doi:10.1016/j.commatsci.2017.03.055
  also at www.aflow.org/src/aflowpi
+
+
+Contributions to PAOFLOW were made by the following developers: Frank Cerasoli, Andrew Supka, Marcio Costa, Laalitha Liyanage, Haihang Wang, Anooja Jayaraj, Jagoda Slawinska, Priya Gopal, Ilaria Siloi
+
 
  Other references:
 

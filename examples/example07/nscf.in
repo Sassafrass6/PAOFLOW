@@ -9,9 +9,10 @@
     ibrav=  2, celldm(1) =7.5, nat= 1, ntyp= 1,
     ecutwfc =25.0, ecutrho=250.0,
     occupations='smearing', smearing='methfessel-paxton', degauss=0.05
-    noinv=.true.
-    nosym=.true.
+    nosym=.t., noinv=.t.
     nbnd=16
+    nosym=.t.
+    noinv=.t.
  /
  &electrons
     conv_thr =  1.0d-8

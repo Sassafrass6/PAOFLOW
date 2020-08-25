@@ -24,8 +24,6 @@ class PAOFLOW:
 
   comm = rank = size = None
 
-  workpath = inputfile = None
-
   start_time = reset_time = None
 
   # Overestimate factor for guessing memory requirements
@@ -52,7 +50,7 @@ class PAOFLOW:
 
 
 
-  def __init__ ( self, workpath='./', outputdir='output', inputfile=None, savedir=None, smearing='gauss', npool=1, verbose=False ):
+  def __init__ ( self, workpath='./', outputdir='output', inputfile=None, savedir=None, npool=1, smearing='gauss', non_ortho=False, verbose=False, restart=False ):
     '''
     Initialize the PAOFLOW class, either with a save directory with required QE output or with an xml inputfile
 
@@ -61,9 +59,11 @@ class PAOFLOW:
         outputdir (str): Name of the output directory (created in the working directory path)
         inputfile (str): (optional) Name of the xml inputfile
         savedir (str): QE .save directory
-        smearing (str): Smearing type (None, m-p, gauss)
         npool (int): The number of pools to use. Increasing npool may reduce memory requirements.
+        smearing (str): Smearing type (None, m-p, gauss)
+        non_ortho (bool): If True the Hamiltonian will be Orthogonalized after construction
         verbose (bool): False supresses debugging output
+        restart (bool): True if the run is being restarted from a .json data dump.
 
     Returns:
         None
@@ -72,10 +72,6 @@ class PAOFLOW:
     from mpi4py import MPI
     from .defs.header import header
     from .DataController import DataController
-
-    self.workpath = workpath
-    self.outputdir = outputdir
-    self.inputfile = inputfile
 
     #-------------------------------
     # Initialize Parallel Execution
@@ -93,33 +89,38 @@ class PAOFLOW:
       self.start_time = self.reset_time = time()
 
     # Initialize Data Controller
-    self.data_controller = DataController(workpath, outputdir, inputfile, savedir, smearing, npool, verbose)
+    self.data_controller = DataController(workpath, outputdir, inputfile, savedir, npool, smearing, non_ortho, verbose, restart)
 
-    # Data Attributes
-    attr = self.data_controller.data_attributes
     self.report_exception = self.data_controller.report_exception
 
-    # Check for CUDA FFT Libraries
-## CUDA not yet supported in PAOFLOW_CLASS
-    attr['use_cuda'] = False
-    attr['scipyfft'] = True
-    if attr['use_cuda']:
-      attr['scipyfft'] = False
-    if self.rank == 0 and attr['verbose']:
+    if not restart:
+      # Data Attributes
+      attr = self.data_controller.data_attributes
+
+      # Check for CUDA FFT Libraries
+      ## CUDA not yet supported in PAOFLOW_CLASS
+      attr['use_cuda'] = False
+      attr['scipyfft'] = True
       if attr['use_cuda']:
-        print('CUDA will perform FFTs on %d GPUs'%1)
-      else:
-        print('SciPy will perform FFTs')
+        attr['scipyfft'] = False
+      if self.rank == 0 and attr['verbose']:
+        if attr['use_cuda']:
+          print('CUDA will perform FFTs on %d GPUs'%1)
+        else:
+          print('SciPy will perform FFTs')
 
     # Report execution information
     if self.rank == 0:
-      if self.size == 1:
-        print('Serial execution')
+      if restart:
+        print('Run starting from Restart data.')
       else:
-        print('Parallel execution on %d processors and %d pool'%(self.size,attr['npool']) + ('' if attr['npool']==1 else 's'))
+        if self.size == 1:
+          print('Serial execution')
+        else:
+          print('Parallel execution on %d processors and %d pool'%(self.size,attr['npool']) + ('' if attr['npool']==1 else 's'))
 
     # Do memory checks
-    if self.rank == 0:
+    if not restart and self.rank == 0:
       gbyte = self.memory_check()
       print('Estimated maximum array size: %.2f GBytes\n' %(gbyte))
 
@@ -135,7 +136,7 @@ class PAOFLOW:
     if self.rank == 0:
 
       # White spacing between module name and reported time
-      spaces = 40
+      spaces = 35
       lmn = len(mname)
       if len(mname) > spaces:
         print('DEBUG: Please use a shorter module tag.')
@@ -144,8 +145,59 @@ class PAOFLOW:
       # Format string and print
       lms = spaces-lmn
       dt = time() - self.reset_time
-      print('%s in: %s %.3f sec'%(mname,lms*' ',dt))
+      print('%s in: %s %8.3f sec'%(mname,lms*' ',dt))
       self.reset_time = time()
+
+
+
+  def restart_dump ( self, fname_prefix='paoflow_dump' ):
+    '''
+      Saves the necessary information to restart a PAOFLOW run from any step in calculation.
+
+      Arguments:
+          fname_prefix (str): Prefix of the filenames which will be written. Files are written to the directory housing the python script which instantiates PAOFLOW, unless otherwise specified in this argument.
+
+      Returns:
+          None
+    '''
+    from pickle import dump,HIGHEST_PROTOCOL
+
+    fname = fname_prefix + '_%d'%self.rank + '.json'
+
+    arry,attr = self.data_controller.data_dicts()
+    with open(fname, 'wb') as f:
+      dump([arry,attr], f, HIGHEST_PROTOCOL)
+
+
+
+  def restart_load ( self, fname_prefix ):
+    '''
+      Loads the previously dumped save files and populates the DataController with said data.
+
+      Arguments:
+          fname_prefix (str): Prefix of the filenames which will be written. Files are written to the directory housing the python script which instantiates PAOFLOW, unless otherwise specified in this argument.
+
+      Returns:
+          None
+    '''
+    from os.path import exists
+    from pickle import load
+
+    fname = fname_prefix + '_%d'%self.rank + '.json'
+    if not exists(fname):
+      print('Restart file named %s does not exist.'%fname)
+      raise OSError('File: %s not found.'%fname)
+
+    arry,attr = None,None
+    with open(fname, 'rb') as f:
+      arry,attr = load(f)
+
+    if self.size != attr['mpisize']:
+      print('Restarted runs must use the same number of cores as the original run.')
+      raise ValueError('Number of processors does not match that of the previous run.')
+
+    self.data_controller.data_arrays = arry
+    self.data_controller.data_attributes = attr
 
 
 
@@ -186,7 +238,7 @@ class PAOFLOW:
 
     if self.rank == 0:
       tt = time() - self.start_time
-      print('Total CPU time =%s%.3f sec'%(27*' ',tt))
+      print('Total CPU time =%s%8.3f sec'%(25*' ',tt))
 
     verbose = self.data_controller.data_attributes['verbose']
 
@@ -201,9 +253,6 @@ class PAOFLOW:
       if self.rank == 0:
         print("Memory usage on rank 0:  %6.4f GB"%(mem[0]/1024.0**2))
         print("Maximum concurrent memory usage:  %6.4f GB"%(mem0[0]/1024.0**2))
-
-    MPI.Finalize()
-    quit()
 
 
 
@@ -236,13 +285,12 @@ class PAOFLOW:
 
 
 
-  def pao_hamiltonian ( self, non_ortho=False, shift_type=1 ):
+  def pao_hamiltonian ( self, shift_type=1, write_binary=False, expand_wedge=True, symmetrize=False, thresh=1.e-6, max_iter=16 ):
     '''
     Construct the Tight Binding Hamiltonian
     Yields 'HRs', 'Hks' and 'kq_wght'
 
     Arguments:
-        non_ortho (bool): If True the Hamiltonian will be Orthogonalized after construction
         shift_type (int): Shift type [ 0-(PRB 2016), 1-(PRB 2013), 2-No Shift ] 
 
     Returns:
@@ -255,8 +303,17 @@ class PAOFLOW:
     # Data Attributes and Arrays
     arrays,attr = self.data_controller.data_dicts()
 
-    if 'non_ortho' not in attr: attr['non_ortho'] = non_ortho
     if 'shift_type' not in attr: attr['shift_type'] = shift_type
+    if 'write_binary' not in attr: attr['write_binary'] = write_binary
+
+    attr['symm_thresh'] = thresh
+    attr['symmetrize'] = symmetrize
+    attr['symm_max_iter'] = max_iter
+    attr['expand_wedge'] = expand_wedge
+
+    if attr['symmetrize'] and attr['non_ortho']:
+      if rank == 0:
+        print('WARNING: Non-ortho is currently not supported with pao_sym. Use nosym=.true., noinv=.true.')
 
     try:
       do_build_pao_hamiltonian(self.data_controller)
@@ -266,7 +323,7 @@ class PAOFLOW:
         self.comm.Abort()
     self.report_module_time('Building Hks')
 
-    # Done with U
+    # Done with U and Sks
     del arrays['U']
 
     try:
@@ -274,8 +331,6 @@ class PAOFLOW:
 
       ### PARALLELIZATION
       self.data_controller.broadcast_single_array('HRs')
-      if attr['non_ortho']:
-        self.data_controller.broadcast_single_array('SRs')
 
       get_K_grid_fft(self.data_controller)
     except:
@@ -283,18 +338,6 @@ class PAOFLOW:
       if attr['abort_on_exception']:
         self.comm.Abort()
     self.report_module_time('k -> R')
-
-    # Orthogonalization
-    if non_ortho:
-      try:
-        from .defs.do_ortho import do_orthogonalize
-
-        do_orthogonalize(self.data_controller)
-      except:
-        self.report_exception('pao_hamiltonian')
-        if attr['abort_on_exception']:
-          self.comm.Abort()
-      self.report_module_time('Orthogonalize')
 
 
 
@@ -332,10 +375,9 @@ class PAOFLOW:
         self.comm.Abort()
 
     self.comm.Barrier()
+    
 
-
-
-  def z2_pack ( self, fname='z2pack_hamiltonian.hm' ):
+  def z2_pack ( self, fname='z2pack_hamiltonian.dat' ):
     '''
     Write 'HRs' to file for use with Z2 Pack
 
@@ -439,7 +481,7 @@ class PAOFLOW:
 
     Returns:
         None
-    '''
+mo    '''
     from .defs.do_wave_function_site_projection import wave_function_site_projection
 
     try:
@@ -450,7 +492,6 @@ class PAOFLOW:
         self.comm.Abort()
 
     self.report_module_time('wave_function_projection')
-
 
 
   def doubling_Hamiltonian ( self, nx , ny, nz ):
@@ -527,7 +568,7 @@ class PAOFLOW:
 
 
 
-  def spin_operator ( self, spin_orbit=False, sh=None, nl=None):
+  def spin_operator ( self, spin_orbit=False, sh_l=None, sh_j=None):
     '''
     Calculate the Spin Operator for calculations involving spin
       Requires: None
@@ -546,13 +587,12 @@ class PAOFLOW:
 
     if 'do_spin_orbit' not in attr: attr['do_spin_orbit'] = spin_orbit
 
-    if 'sh' not in arrays and 'nl' not in arrays:
-      if sh is None and nl is None:
+    if 'sh_l' not in arrays and 'sh_j' not in arrays:
+      if sh_l is None and sh_j is None:
         from .defs.read_sh_nl import read_sh_nl
-        arrays['sh'],arrays['nl'] = read_sh_nl(self.data_controller)
+        arrays['sh_l'],arrays['sh_j'] = read_sh_nl(self.data_controller)
       else:
-        arrays['sh'],arrays['nl'] = sh,nl
-
+        arrays['sh_l'],arrays['sh_j'] = sh_l,sh_j
     try:
       nawf = attr['nawf']
 
@@ -573,7 +613,7 @@ class PAOFLOW:
         from .defs.clebsch_gordan import clebsch_gordan
         # Spin operator matrix  in the basis of |j,m_j,l,s> (full SO)
         for spol in range(3):
-          Sj[spol,:,:] = clebsch_gordan(nawf, arrays['sh'], arrays['nl'], spol)
+          Sj[spol,:,:] = clebsch_gordan(nawf, arrays['sh_l'], arrays['sh_j'], spol)
 
       arrays['Sj'] = Sj
     except:
@@ -763,21 +803,22 @@ class PAOFLOW:
 
 
 
-  def gradient_and_momenta ( self ):
+  def gradient_and_momenta ( self,band_curvature=False ):
     '''
     Calculate the Gradient of the k-space Hamiltonian, 'Hksp'
     Requires 'Hksp'
     Yields 'dHksp'
 
     Arguments:
-        None
+      None
 
     Returns:
-        None
+      None
     '''
     from .defs.do_gradient import do_gradient
     from .defs.do_momentum import do_momentum
     from .defs.communication import gather_scatter
+    import numpy as np 
 
     arrays,attr = self.data_controller.data_dicts()
 
@@ -786,6 +827,7 @@ class PAOFLOW:
 
       for ik in range(snktot):
         for ispin in range(nspin):
+          #make sure Hksp is hermitian (it should be)
           arrays['Hksp'][ik,:,:,ispin] = (np.conj(arrays['Hksp'][ik,:,:,ispin].T) + arrays['Hksp'][ik,:,:,ispin])/2.
 
       arrays['Hksp'] = np.reshape(arrays['Hksp'], (snktot, nawf**2, nspin))
@@ -795,14 +837,22 @@ class PAOFLOW:
 
       do_gradient(self.data_controller)
 
-      # No more need for k-space Hamiltonian
-      del arrays['Hksp']
+      if not band_curvature:
+        # No more need for k-space Hamiltonian
+        del arrays['Hksp']
 
       ### PARALLELIZATION
       #gather dHksp on nawf*nawf and scatter on k points
       arrays['dHksp'] = np.reshape(arrays['dHksp'], (snawf,attr['nkpnts'],3,nspin))
       arrays['dHksp'] = np.moveaxis(gather_scatter(arrays['dHksp'],1,attr['npool']), 0, 2)
       arrays['dHksp'] = np.reshape(arrays['dHksp'], (snktot,3,nawf,nawf,nspin), order="C")
+
+      if band_curvature:
+        from .defs.do_band_curvature import do_band_curvature
+        do_band_curvature (self.data_controller)
+        # No more need for k-space Hamiltonian
+        del arrays['Hksp']
+      
     except:
       self.report_exception('gradient_and_momenta')
       if attr['abort_on_exception']:
@@ -834,9 +884,6 @@ class PAOFLOW:
 
     if smearing != 'gauss' and 'smearing' != 'm-p':
       raise ValueError('Smearing type %s not supported.\nSmearing types are \'gauss\' and \'m-p\''%str(smearing))
-      #if self.rank == 0:
-      #  print('Smearing type %s not supported.\nSmearing types are \'gauss\' and \'m-p\''%str(attr['smearing']))
-      #quit()
 
     try:
       do_adaptive_smearing(self.data_controller, smearing)
@@ -1043,7 +1090,7 @@ class PAOFLOW:
     attr['eminH'] = emin
     attr['emaxH'] = emax
 
-    if 'a_tensor' is not None: arrays['a_tensor'] = np.array(a_tensor)
+    if a_tensor is not None: arrays['a_tensor'] = np.array(a_tensor)
     if 'fermi_up' not in attr: attr['fermi_up'] = fermi_up
     if 'fermi_dw' not in attr: attr['fermi_dw'] = fermi_dw
 
@@ -1058,7 +1105,7 @@ class PAOFLOW:
 
 
 
-  def transport ( self, tmin=300, tmax=300, tstep=1, emin=0., emax=10., ne=500, t_tensor=None ):
+  def transport ( self, tmin=300, tmax=300, tstep=1, emin=0., emax=10., ne=500, t_tensor=None, carrier_conc=False):
     '''
     Calculate the Transport Properties
 
@@ -1090,8 +1137,15 @@ class PAOFLOW:
       for n in range(bnd):
         velkp[:,:,n,:] = np.real(arrays['pksp'][:,:,n,n,:])
 
-      do_transport(self.data_controller, temps, ene, velkp)
+      do_transport(self.data_controller, temps, ene, velkp, carrier_conc)
+
+
+      if carrier_conc:
+        from .defs.do_transport import do_carrier_conc        
+        do_carrier_conc(self.data_controller,velkp,ene,temps)
+
       velkp = None
+
     except:
       self.report_exception('transport')
       if attr['abort_on_exception']:
@@ -1101,7 +1155,7 @@ class PAOFLOW:
 
 
 
-  def dielectric_tensor ( self, metal=False, temp=None, delta=0.01, emin=0., emax=10., ne=500., d_tensor=None ):
+  def dielectric_tensor ( self, metal=False, temp=None, delta=0.01, emin=0., emax=10., ne=500, d_tensor=None ):
     '''
     Calculate the Dielectric Tensor
 
@@ -1139,3 +1193,20 @@ class PAOFLOW:
         self.comm.Abort()
 
     self.report_module_time('Dielectric Tensor')
+
+
+  def find_weyl_points ( self, symmetrize=None, search_grid=[8,8,8] ):
+    from .defs.do_find_Weyl import find_weyl
+
+    try:
+      if symmetrize is not None:
+        self.data_controller.data_attributes['symmetrize'] = symmetrize
+      find_weyl(self.data_controller, search_grid)
+
+    except:
+      self.report_exception('pao_hamiltonian')
+      if self.data_controller.data_attributes['abort_on_exception']:
+        self.comm.Abort()
+
+
+    self.report_module_time('Weyl Search')

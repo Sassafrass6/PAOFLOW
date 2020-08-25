@@ -6,8 +6,8 @@
  /
  &system    
     ibrav=  2, celldm(1) =10.599478, nat=  2, ntyp= 1,
-    ecutwfc =18.0,  nbnd = 12
-    nosym=.true., noinv=.true.
+    ecutwfc =18.0,  nbnd = 18
+
  /
  &electrons
     mixing_mode = 'plain'

@@ -19,11 +19,34 @@
 import numpy as np
 import time
 from mpi4py import MPI
-from .load_balancing import *
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
+
+def load_balancing ( size, rank, n ):
+    # Load balancing
+    splitsize = float(n)/float(size)
+    start = int(np.around(rank*splitsize,decimals=2))
+    stop = int(np.around((rank+1)*splitsize,decimals=2))
+    return(start, stop)
+
+# For each processor calculate 3 values:
+# 0 - Total number of items to be scattered/gathered on this processor
+# 1 - Index in complete array where the subarray begins
+# 2 - Dimension of the subarray on this processor
+def load_sizes ( size, n, dim):
+    sizes = np.empty((size,3), dtype=int)
+    splitsize = float(n)/float(size)
+    for i in range(size):
+        start = int(np.around(i*splitsize,decimals=2))
+        stop = int(np.around((i+1)*splitsize,decimals=2))
+        sizes[i][0] = dim*(stop-start)
+        sizes[i][1] = dim*start
+        sizes[i][2] = stop-start
+    return sizes
+
+
 
 # Scatters first dimension of an array of arbitrary length
 def scatter_array ( arr, sroot=0 ):
@@ -114,7 +137,7 @@ def scatter_full(arr,npool,sroot=0):
 
     temp = np.zeros(per_proc_shape,order="C",dtype=pydtype)
 
-    nchunks = nsize/size
+    nchunks = nsize//size
     
     if nchunks!=0:
         for pool in range(npool):
@@ -154,7 +177,7 @@ def gather_full(arr,npool,sroot=0):
         temp = np.zeros(per_proc_shape,order="C",dtype=arr.dtype)
     else: temp = None
 
-    nchunks = nsize/size
+    nchunks = nsize//size
     
     if nchunks!=0:
         for pool in range(npool):
@@ -185,6 +208,7 @@ def gather_scatter(arr,scatter_axis,npool):
     #broadcast indices that for scattered array to proc with rank 'r'
     size_r = np.zeros((size),dtype=int,order='C')
     scatter_ind = np.zeros((arr.shape[scatter_axis]),dtype=int,order='C')
+    
     if rank==0:
         gather_array(size_r,np.array(axis_ind.size,dtype=int))
         gather_array(scatter_ind,np.array(axis_ind,dtype=int))
@@ -213,3 +237,37 @@ def gather_scatter(arr,scatter_axis,npool):
     start = end = scatter_ind = None
 
     return temp
+
+
+def gen_window(array,root=0):
+    # creates a shared memory copy of array on
+    # rank == root that all procs can access
+
+    if rank==root:
+        array_shape=array.shape
+        pydtype = array.dtype
+    else:
+        array_shape=None
+        pydtype=None
+
+    array_shape=comm.bcast(array_shape)
+    pydtype=comm.bcast(pydtype)
+
+    size=np.prod(array_shape)
+
+    itemsize = MPI._typedict[np.dtype(pydtype).char].Get_size()
+    if rank == root:
+        nbytes = size * itemsize
+    else:
+        nbytes = 0
+
+    win = MPI.Win.Allocate_shared(nbytes, itemsize, comm=comm)
+    buf, itemsize = win.Shared_query(0)
+    win_array = np.ndarray(buffer=buf, dtype=pydtype, shape=array_shape,)
+
+    if rank==root:
+        win_array[:]=array
+
+    comm.Barrier()
+    
+    return win_array

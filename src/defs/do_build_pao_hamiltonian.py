@@ -17,9 +17,6 @@
 #
 
 import numpy as np
-import numpy.random as rd
-from scipy import linalg as spl
-from numpy import linalg as npl
 
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
@@ -27,6 +24,9 @@ rank = comm.Get_rank()
 
 ### Reformat
 def build_Hks ( data_controller ):
+  from scipy import linalg as spl
+
+  minimal = False
 
   arrays,attributes = data_controller.data_dicts()
 
@@ -39,8 +39,7 @@ def build_Hks ( data_controller ):
 
   U = arrays['U'] 
   my_eigsmat = arrays['my_eigsmat']
-  
-  minimal = False
+
   Hksaux = np.zeros((nawf,nawf,nkpnts,nspin), dtype=complex)
   if minimal:
     Hks = np.zeros((bnd,bnd,nkpnts,nspin), dtype=complex)
@@ -90,6 +89,8 @@ def build_Hks ( data_controller ):
       Hksaux[:,:,ik,ispin] = 0.5*(Hksaux[:,:,ik,ispin] + np.conj(Hksaux[:,:,ik,ispin].T))
 
       if minimal:
+        import numpy.random as rd
+        from numpy import linalg as npl
         Sbd = np.zeros((nawf,nawf),dtype=complex)
         Sbdi = np.zeros((nawf,nawf),dtype=complex)
         S = sv = np.zeros((nawf,nawf),dtype=complex)
@@ -116,18 +117,21 @@ def build_Hks ( data_controller ):
 
 
 def do_build_pao_hamiltonian ( data_controller ):
-
-  if rank != 0:
-    return
-
   #------------------------------
   # Building the PAO Hamiltonian
   #------------------------------
   arry,attr = data_controller.data_dicts()
 
   ashape = (attr['nawf'],attr['nawf'],attr['nk1'],attr['nk2'],attr['nk3'],attr['nspin'])
-
+  
   arry['Hks'] = build_Hks(data_controller)
+
+  if attr['expand_wedge']:
+    from .pao_sym import open_grid_wrapper
+    open_grid_wrapper(data_controller)
+
+  if rank != 0:
+    return
 
   # NOTE: Take care of non-orthogonality, if needed
   # Hks from projwfc is orthogonal. If non-orthogonality is required, we have to 
@@ -144,7 +148,11 @@ def do_build_pao_hamiltonian ( data_controller ):
     arry['Sks'] = np.transpose(arry['Sks'], (1,0,2))
 
     arry['Hks'] = do_non_ortho(arry['Hks'],arry['Sks'])
-    arry['Sks'] = np.reshape(arry['Sks'], ashape[:-1])
+    try:
+      arry['Sks'] = np.reshape(arry['Sks'], ashape[:-1])
+    except: pass
+
+    data_controller.write_Hk_acbn0()
 
   arry['Hks'] = np.reshape(arry['Hks'], ashape)
 
@@ -162,8 +170,3 @@ def do_Hks_to_HRs ( data_controller ):
     # Original k grid to R grid
     arry['HRs'] = np.zeros_like(arry['Hks'])
     arry['HRs'] = FFT.ifftn(arry['Hks'], axes=[2,3,4])
-
-    if attr['non_ortho']:
-      arry['SRs'] = np.zeros_like(arry['Sks'])
-      arry['SRs'] = FFT.ifftn(arry['Sks'], axes=[2,3,4])
-      del arry['Sks']

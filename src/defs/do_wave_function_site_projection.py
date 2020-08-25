@@ -69,3 +69,6 @@ def wave_function_site_projection(data_controller):
                 f.write (("%5.4f %5.4f %5.4f  \n") %(tau[n,0],tau[n,1],total+0.0001))
 
         f.close()
+
+    #print("Fuck",site.shape)
+    #print("Fuck",naw,e_k.shape)

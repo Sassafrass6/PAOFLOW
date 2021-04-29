@@ -101,10 +101,10 @@ class DataController:
           else:
             attr['do_spin_orbit'] = False
           self.read_qe_output()
-        except:
+        except Exception as e:
           print('\nERROR: Could not read QE xml data file')
           self.report_exception('Data Controller Initialization')
-          self.comm.Abort()
+          raise e
 
     self.comm.Barrier()
 
@@ -113,10 +113,10 @@ class DataController:
       try:
         self.data_arrays = self.comm.bcast(self.data_arrays, root=0)
         self.data_attributes = self.comm.bcast(self.data_attributes, root=0)
-      except:
+      except Exception as e:
         print('ERROR: MPI was unable to broadcast')
         self.report_exception('Initialization Broadcast')
-        self.comm.Abort()
+        raise e
 
 
   def data_dicts ( self ):
@@ -190,16 +190,9 @@ class DataController:
       parse_qe_data_file_schema(self, fpath+'/data-file-schema.xml')
     elif exists(fpath+'/data-file.xml'):
       from .defs.read_QE_xml import parse_qe_data_file
-      parse_qe_data_file(self, fpath+'/data-file.xml')
+      parse_qe_data_file(self, fpath, 'data-file.xml')
     else:
       raise Exception('data-file.xml or data-file-schema.xml were not found.\n')
-
-    if exists(fpath+'/atomic_proj.xml'):
-      from .defs.read_QE_xml import parse_qe_atomic_proj
-      parse_qe_atomic_proj(self, fpath+'/atomic_proj.xml')
-    else:
-      raise Exception('atomic_proj.xml was not found.\n')
-   
 
 
   def write_file_row_col ( self, fname, col1, col2 ):
@@ -294,11 +287,50 @@ class DataController:
     self.comm.Barrier()
 
 
+#  def write_xsf ( self, data, fname='rs_plot.xsf' ):
+#    import numpy as np
+#    
+#    if self.rank == 0:
+#      from os.path import join
+#
+#      fpath = self.data_attributes['opath']
+#      if data.dtype == complex:
+#        data = np.abs(data)
+#      atoms = self.data_arrays['tau']
+#      species = self.data_arrays['atoms']
+#      a_vecs = self.data_attributes['alat'] * self.data_arrays['a_vectors'] * 0.529177
+#
+#      with open(join(fpath,fname), 'w') as f:
+#        f.write('CRYSTAL\nPRIMVEC\n')
+#        for i in range(3):
+#          f.write(' %.14f %.14f %.14f\n'%tuple(a_vecs[i]))
+#        f.write('PRIMCOORD\n%d 1\n'%atoms.shape[0])
+#        for i in range(atoms.shape[0]):
+#          tup = (species[i],) + tuple(atoms[i])
+#          f.write(' %s %20.14f %20.14f %20.14f\n'%tup)
+#
+#        f.write('BEGIN_BLOCK_DATAGRID_3D\n data\n BEGIN_DATAGRID_3Dgrid#1\n')
+#
+#        shape = data.shape
+#        f.write(' %d %d %d\n'%shape)
+#        f.write(' 0 0 0\n') # Origin
+#        for i in range(3):
+#          f.write(' %f %f %f\n'%tuple(a_vecs[i] * (shape[i]-1) / shape[i]))
+#
+#        for k in range(shape[2]):
+#          for j in range(shape[1]):
+#            f.write(' ' + ' '.join(['%f' % d for d in data[:, j, k]]) + '\n')
+#          f.write('\n')
+#
+#        f.write('END_DATAGRID_3D\nEND_BLOCK_DATAGRID_3D\n')
+#
+#    self.comm.Barrier()
+
 
   def write_Hk_acbn0 ( self ):
     #----------------------
     # write to file Hks,Sks,kpnts,kpnts_wght
-    #----------------------                                                                                                                           
+    #---------------------- 
     import numpy as np
     import os,sys
 
@@ -461,10 +493,10 @@ class DataController:
                                                                HRS[l,m,i,j,k,0].real,
                                                                HRS[l,m,i,j,k,0].imag,))
                                                                
-    except:
+    except Exception as e:
       self.report_exception('z2_pack')
       if self.data_attributes['abort_on_exception']:
-        self.comm.Abort()
+        raise e
 
     self.comm.Barrier()
 

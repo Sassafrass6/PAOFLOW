@@ -11,7 +11,7 @@
 #
 
 import numpy as np
-from constants import ANGSTROM_AU
+import scipy.linalg as la
 
 def doubling_HRs ( data_controller ):
     from scipy.fftpack import fftshift
@@ -22,7 +22,6 @@ def doubling_HRs ( data_controller ):
 
     arry,attr = data_controller.data_dicts()
 
-    do_spin_orbit = attr['do_spin_orbit']    
     nx = attr['nx']   
     ny = attr['ny']   
     nz = attr['nz']   
@@ -94,13 +93,13 @@ def doubling_HRs ( data_controller ):
 
         arry['HRs'] = HR_double
         HR_double = None
-        arry['tau']   = np.append(arry['tau'],arry['tau'][:,:]+arry['a_vectors'][0,:]*ANGSTROM_AU,axis=0)
+        arry['tau']   = np.append(arry['tau'],arry['tau'][:,:]+arry['a_vectors'][0,:]*attr['alat'],axis=0)
         arry['a_vectors'][0,:]=2*arry['a_vectors'][0,:]
         doubling_attr_arry(data_controller)
 
 
 
-    # This construction is doubling along the X direction nx times    
+    # This construction is doubling along the Y direction ny times    
     for dy in range(ny):
         HR_double= np.zeros((2*attr['nawf'],2*attr['nawf'],nk1,nk2,nk3,nspin),dtype=complex)
 
@@ -133,11 +132,11 @@ def doubling_HRs ( data_controller ):
 
         arry['HRs'] = HR_double
         HR_double = None
-        arry['tau']   = np.append(arry['tau'],arry['tau'][:,:]+arry['a_vectors'][1,:]*ANGSTROM_AU,axis=0)
+        arry['tau']   = np.append(arry['tau'],arry['tau'][:,:]+arry['a_vectors'][1,:]*attr['alat'],axis=0)
         arry['a_vectors'][1,:]=2*arry['a_vectors'][1,:]
         doubling_attr_arry(data_controller)
 
-    # This construction is doubling along the X direction nx times    
+    # This construction is doubling along the Z direction nz times    
     delete_index=0
     for dz in range(nz):
 
@@ -171,8 +170,8 @@ def doubling_HRs ( data_controller ):
         
         arry['HRs'] = HR_double
         HR_double = None
-        arry['tau']   = np.append(arry['tau'],arry['tau'][:,:]+arry['a_vectors'][2,:]*ANGSTROM_AU,axis=0)
-        arry['a_vectors'][1,:]=2*arry['a_vectors'][1,:]
+        arry['tau']   = np.append(arry['tau'],arry['tau'][:,:]+arry['a_vectors'][2,:]*attr['alat'],axis=0)
+        arry['a_vectors'][2,:]=2*arry['a_vectors'][2,:]
         doubling_attr_arry(data_controller)
 
 
@@ -180,18 +179,30 @@ def doubling_attr_arry ( data_controller ):
 
     arry,attr = data_controller.data_dicts()
 
-    do_spin_orbit = attr['do_spin_orbit']    
-
     # Increassing nawf/natoms
     attr['nawf'] = 2*attr['nawf']
-    attr['natoms'] = 2*attr['natoms']
+    if 'natoms' in attr: attr['natoms'] = 2*attr['natoms']
+    if 'nelec' in attr: attr['nelec'] = 2*attr['nelec']
+    if 'nbnds' in attr: attr['nbnds'] = 2*attr['nbnds']
+    if 'bnd' in attr: attr['bnd'] = 2*attr['bnd']
     #doubling the atom number of orbitals / orbital character / multiplicity
-    arry['naw']   = np.append(arry['naw'],arry['naw']) 
-    arry['sh']   = np.append(arry['sh'],arry['sh']) 
-    arry['nl']   = np.append(arry['nl'],arry['nl']) 
+    if 'naw' in arry: arry['naw']   = np.append(arry['naw'],arry['naw'])
+    if 'sh' in arry: arry['sh']   = np.append(arry['sh'],arry['sh'])
+    if 'nl' in arry: arry['nl']   = np.append(arry['nl'],arry['nl'])
+    if 'atoms' in arry: arry['atoms']   = np.append(arry['atoms'],arry['atoms'])
+    # if Sj is already computed, then double it
+    if 'Sj' in arry:
+        Sj_double = np.zeros((3,attr['nawf'],attr['nawf']),dtype=complex)
+        for spol in range(3):
+            Sj = arry['Sj'][spol]
+            Sj_double[spol] = la.block_diag(*[Sj,Sj])
+
+        arry['Sj'] = Sj_double
+        Sj_double = None
+
     # If the SOC is included pertubative
-    if (attr['do_spin_orbit']):
-        arry['lambda_p']   = np.append(arry['lambda_p'],arry['lambda_p'])
-        arry['lambda_d']   = np.append(arry['lambda_d'],arry['lambda_d'])
-        arry['orb_pseudo'] = np.append(arry['orb_pseudo'],arry['orb_pseudo'])
-#
+    if 'do_spin_orbit' in attr and (attr['do_spin_orbit']):
+        if 'lambda_p' in arry: arry['lambda_p']   = np.append(arry['lambda_p'],arry['lambda_p'])
+        if 'lambda_d' in arry: arry['lambda_d']   = np.append(arry['lambda_d'],arry['lambda_d'])
+        if 'orb_pseudo' in arry: arry['orb_pseudo'] = np.append(arry['orb_pseudo'],arry['orb_pseudo'])
+

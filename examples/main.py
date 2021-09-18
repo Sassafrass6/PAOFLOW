@@ -51,8 +51,6 @@ def main():
   #   attributes and arrays read from inputfiles
   arry,attr = paoflow.data_controller.data_dicts()
 
-  paoflow.read_atomic_proj_QE()
-
   paoflow.projectability()
 
   paoflow.pao_hamiltonian(expand_wedge=attr['expand_wedge'],thresh=attr['symm_thresh'],

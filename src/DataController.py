@@ -238,8 +238,10 @@ class DataController:
 
     if self.rank == 0:
       from .defs.write2bxsf import write2bxsf
+      from .defs.write2bxsf4skeaf import write2bxsf4skeaf
 
       write2bxsf(self, fname, bands, nbnd, indices, attr['fermi_up'], attr['fermi_dw'])
+      write2bxsf4skeaf(self, fname, bands, nbnd, indices, attr['fermi_up'], attr['fermi_dw'])
 
 
   def write_bands ( self, fname, bands ):

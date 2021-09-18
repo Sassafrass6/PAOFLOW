@@ -275,9 +275,9 @@ class PAOFLOW:
     arry,attr = self.data_controller.data_dicts()
     
     if internal:
-      basis,attr['shells'] = build_aewfc_basis(self.data_controller)
+      basis,arry['shells'] = build_aewfc_basis(self.data_controller)
     else:
-      basis,attr['shells'] = build_pswfc_basis_all(self.data_controller)
+      basis,arry['shells'] = build_pswfc_basis_all(self.data_controller)
     nkpnts = len(arry['kpnts'])
     nbnds = attr['nbnds']
     nspin = attr['nspin']
@@ -319,14 +319,14 @@ class PAOFLOW:
     else:
       raise Exception('atomic_proj.xml was not found.\n')
 
-    attr['jchia'] = {}
-    attr['shells'] = {}
+    arry['jchia'] = {}
+    arry['shells'] = {}
     for at,pseudo in arry['species']:
       fname = join(attr['fpath'], pseudo)
       if exists(fname):
         upf = UPF(fname)
-        attr['shells'][at] = upf.shells
-        attr['jchia'][at] = upf.jchia
+        arry['shells'][at] = upf.shells
+        arry['jchia'][at] = upf.jchia
       else:
         raise Exception('Pseudopotential not found: %s'%fname)
 
@@ -364,7 +364,7 @@ class PAOFLOW:
   def pao_hamiltonian ( self, shift_type=1, insulator=False, write_binary=False, expand_wedge=True, symmetrize=False, thresh=1.e-6, max_iter=16 ):
     '''
     Construct the Tight Binding Hamiltonian
-    Yields 'HRs', 'Hks' and 'kq_wght'
+    Populates DataController with 'HRs', 'Hks' and 'kq_wght'
 
     Arguments:
         shift_type (int): Shift type [ 0-(PRB 2016), 1-(PRB 2013), 2-No Shift ] 
@@ -677,7 +677,7 @@ mo    '''
 
     if ('sh_l' not in arrays and 'sh_j' not in arrays) and not adhoc_SO:
       if sh_l is None and sh_j is None:
-        sh = attr['shells']
+        sh = arrays['shells']
         shells,jchia = [],[]
         for i,a in enumerate(arrays['atoms']):
           ash = []
@@ -747,9 +747,9 @@ mo    '''
     if 'spin_Hall' not in attr: attr['spin_Hall'] = spin_Hall
     if 'do_spin_orbit' not in attr: attr['do_spin_orbit'] = spin_orbit
 
-    if 'spol' not in attr: attr['spol'] = spol
-    if 'ipol' not in attr: attr['ipol'] = ipol
-    if 'jpol' not in attr: attr['jpol'] = jpol
+    attr['spol'] = spol
+    attr['ipol'] = ipol
+    attr['jpol'] = jpol
 
     if attr['spol'] is None or attr['ipol'] is None or attr['jpol'] is None:
       if self.rank == 0:
@@ -778,7 +778,7 @@ mo    '''
   def interpolated_hamiltonian ( self, nfft1=0, nfft2=0, nfft3=0, reshift_Ef=False ):
     '''
     Calculate the interpolated Hamiltonian with the method of zero padding
-    Yields 'Hksp'
+    Populates DataController with 'Hksp'
 
     Arguments:
         nfft1 (int): Desired size of the interpolated Hamiltonian's first dimension
@@ -857,7 +857,7 @@ mo    '''
   def pao_eigh ( self, bval=0 ):
     '''
     Calculate the Eigen values and vectors of k-space Hamiltonian 'Hksp'
-    Yields 'E_k' and 'v_k'
+    Populates DataController with 'E_k' and 'v_k'
 
     Arguments:
         bval (int): Top valence band number (nelec/2) to correctly shift Eigenvalues
@@ -873,7 +873,8 @@ mo    '''
     if 'bval' not in attr: attr['bval'] = bval
 
     # HRs and Hks are replaced with Hksp
-    del arrays['HRs']
+    if 'HRs' in arrays:
+      del arrays['HRs']
 
     try:
       if 'Hksp' not in arrays:
@@ -912,7 +913,7 @@ mo    '''
     '''
     Calculate the Gradient of the k-space Hamiltonian, 'Hksp'
     Requires 'Hksp'
-    Yields 'dHksp'
+    Populates DataController with 'dHksp'
 
     Arguments:
       None
@@ -975,7 +976,7 @@ mo    '''
   def adaptive_smearing ( self, smearing='gauss' ):
     '''
     Calculate the Adaptive Smearing parameters
-    Yields 'deltakp' and 'deltakp2'
+    Populates DataController with 'deltakp' and 'deltakp2'
 
     Arguments:
         smearing (str): Smearing type (m-p and gauss)
@@ -1070,7 +1071,7 @@ mo    '''
   
   def trim_non_projectable_bands ( self ):
 
-    arrays = self.data_controller.data_arrays
+    arrays, attributes = self.data_controller.data_dicts()
 
     bnd = attributes['nawf'] = attributes['bnd']
 
@@ -1226,8 +1227,35 @@ mo    '''
     self.report_module_time('Anomalous Hall Conductivity')
 
 
+  def effective_mass ( self, emin=-1., emax=1., ne=1000 ):
 
-  def doping( self, tmin=300, tmax=300, nt=1, delta=0.01, emin=-1., emax=1., ne=1000, doping_conc=0., core_electrons=0., fname='doping_' ):
+    '''
+    Calculate effective mass components for kx,ky and kz
+
+    Arguments:
+        tmin (float): The minimum temperature in the range
+        tmax (float): The maximum temperature in the range
+        nt (float): The number of temperature increments
+        emin (float): The minimum energy in the range
+        emax (float): The maximum energy in the range
+        ne (float): The number of energy increments
+
+    Returns:
+        None
+    '''
+    from .defs.do_effective_mass import do_effective_mass
+
+    arrays,attr = self.data_controller.data_dicts()
+
+    ene = np.linspace(emin, emax, ne)
+
+    do_effective_mass(self.data_controller, ene)
+
+    self.report_module_time('Effective mass')
+
+
+
+  def doping ( self, tmin=300, tmax=300, nt=1, delta=0.01, emin=-1., emax=1., ne=1000, doping_conc=0., core_electrons=0., fname='doping_' ):
     '''
     Calculate the chemical potential that corresponds to specified doping for different temperatures
 
@@ -1266,7 +1294,7 @@ mo    '''
 
 
 
-  def transport ( self, tmin=300., tmax=300., nt=1, emin=1., emax=10., ne=500, scattering_channels=[], scattering_weights=[], tau_dict={}, write_to_file=True, save_tensors=False ):
+  def transport ( self, tmin=300., tmax=300., nt=1, emin=-2., emax=2., ne=500, scattering_channels=[], scattering_weights=[], tau_dict={}, do_hall=False, write_to_file=True, save_tensors=False ):
     '''
     Calculate the Transport Properties
 
@@ -1281,6 +1309,7 @@ mo    '''
         scattering_channels (list): List of strings specifying a built in model and/or TauModel objects to evaluate
         scattering_weights (list): List of coefficients weighting components of the harmonic sum when computing tau
         tau_dict (dict): Dictionary housing parameters required for calculating Tau with built-in models
+        do_hall (bool): Set True to calculate hall coefficient
         write_to_file (bool): Set True to write tensors to file
         save_tensors (bool): Set True to save the tensors into the data controller
 
@@ -1302,7 +1331,7 @@ mo    '''
       for n in range(bnd):
         velkp[:,:,n,:] = np.real(arrays['pksp'][:,:,n,n,:])
 
-      do_transport(self.data_controller, temps, ene, velkp, sc, sw, write_to_file, save_tensors)
+      do_transport(self.data_controller, temps, ene, velkp, sc, sw, do_hall, write_to_file, save_tensors)
 
     except Exception as e:
       self.report_exception('transport')
@@ -1356,13 +1385,13 @@ mo    '''
     self.report_module_time('Dielectric Tensor')
 
 
-  def find_weyl_points ( self, symmetrize=None, search_grid=[8,8,8] ):
+  def find_weyl_points ( self, symmetrize=None, test_rad=0.01, search_grid=[8,8,8] ):
     from .defs.do_find_Weyl import find_weyl
 
     try:
       if symmetrize is not None:
         self.data_controller.data_attributes['symmetrize'] = symmetrize
-      find_weyl(self.data_controller, search_grid)
+      find_weyl(self.data_controller, test_rad, search_grid)
 
     except Exception as e:
       self.report_exception('pao_hamiltonian')
@@ -1371,3 +1400,128 @@ mo    '''
 
 
     self.report_module_time('Weyl Search')
+
+  def ipr(self, fname='ipr'):
+    '''
+    Compute the inverse partiticipation ratio (IPR) from PAO eigenstates
+
+                 \sum_n |v_nk|^4
+    IPR_nk = -----------------------
+              ( \sum_n |v_nk|^2 )^2
+
+    where n is the band index and k the k-point
+
+    The final shape is (nspin,nkpts,nbands,3),
+    where the last axis gives: 0 as the k-point coordinate,
+                               1 the band energy, and
+                               2 the inverse partition ratio
+
+    The result in saved to a ipr.npy file.
+    To open the file one should use:
+    `ipr = np.load('ipr.npy')`
+
+    '''
+
+    from .defs.do_ipr import inverse_participation_ratio
+    from os.path import join
+
+    arry, attr = self.data_controller.data_dicts()
+
+    try:
+      arry['ipr'] = inverse_participation_ratio(self.data_controller)
+      np.save(join(attr['opath'],fname+'.npy'),arry['ipr'])
+
+    except Exception as e:
+      self.report_exception('ipr')
+      if attr['abort_on_exception']:
+        raise e
+
+    self.report_module_time('Inverse Participation Ratio (IPR)')
+
+  def berry_phase (self, kspace_method='path', berry_path=None, high_sym_points=None, kpath_funct=None, nk1=100, nk2=100, closed=True, method='berry', sub=None, occupied=True, kradius=None, kcenter=[0.,0.,0.],kxlim=(-0.5,0.5),kylim=(-0.5,0.5),eigvals=False,fname='berry_phase',contin=False):
+    '''
+    Compute the Berry phase using the discretized formula.
+    See R. Resta, Rev. Mod. Phys. 66, 899 (1994) and R. Resta, J. Phys.: Condens. Matter 22, 123201 (2010)
+
+    Arguments:
+        kspace_method (str): method used to sample the BZ:
+                             *'path': 1D path along the BZ;
+                             *'track': 1D path along x direction for several points in the y direction;
+                             *'circle': circular path around a k-point, given center and radius;
+                             *'square': retangular region with nk1 points along x and nk2 points along y. Region defined given x and y start and end points or full BZ.
+        berry_path (str): A string representing the band path to follow. The first and last k-point must not be the same.
+        berry_high_sym_points (dictionary): A dictionary with symbols of high symmetry points as keys and length 3 numpy arrays containg the location of the symmetry points as values.
+        nk (int): Number of k-points to include in the path
+        closed (bool, optional): whether or not to include the connection of the last and first points in the loop
+        method (str, {'berry','zak'}): 'berry' returns the usual berry phase. 'zak' includes the Zak phase for 1D systems which takes into account the Bloch factor exp(-iG.r)
+                                        accumulated over a Brillouin zone. See J. Zak, Phys. Rev. Lett. 62, 2747 (1989)
+        sub (None or list of int, optional): index of selected bands to calculate the Berry phase
+        occupied (bool, optional): calculate the Berry phase over all occupied bands (if set to True, sub is set to None)
+        kxlim (tuple, float): start and end points in x direction for sampling the BZ, used when kspace_method='square' .
+        kylim (tuple, float): start and end points in y direction for sampling the BZ, used when kspace_method='square' .
+        eigvals (bool, optional): write overlap matrix eigenvalues
+        eigvecs (bool, optional): write overlap matrix eigenvectors
+        save_prd (bool, optional): save overlap matrix
+        fname (str, optional): filename to save the berry phase results
+        contin (bool, optional): make berry phase continuous by fixing 2pi shifts
+
+    Returns:
+        Berry/Zak phase
+
+    '''
+    from .defs.do_berry_phase import do_berry_phase
+
+    arry,attr = self.data_controller.data_dicts()
+
+    kspace_method = kspace_method.lower()
+    attr['berry_kspace_method'] = kspace_method
+
+    attr['berry_path'] = berry_path
+    arry['berry_high_sym_points'] = high_sym_points
+
+    attr['berry_nk'] = nk1
+    attr['berry_nk1'] = nk1
+    attr['berry_nk2'] = nk2
+
+    attr['berry_kpath_funct'] = kpath_funct
+
+    arry['berry_kxlim'] = kxlim
+    arry['berry_kylim'] = kylim
+
+    if kspace_method != 'square':
+      attr['berry_eigvals'] = eigvals
+    else:
+      attr['berry_eigvals'] = False
+
+    attr['berry_kradius'] = kradius
+    arry['berry_kcenter'] = np.array(kcenter)
+    attr['berry_eigvals'] = eigvals
+
+    method = method.lower()
+    if method in ['berry','zak']:
+      attr['berry_method'] = method
+    else:
+      print('method should be either berry or zak. Falling back to method = \'berry\'')
+      attr['berry_method'] = 'berry'
+
+    arry['berry_sub'] = sub
+    if sub != None or (sub == None and not occupied):
+      attr['berry_occupied'] = False
+    else:
+      attr['berry_occupied'] = occupied
+
+    attr['berry_closed'] = closed
+    attr['berry_contin'] = contin
+    attr['berry_fname'] = fname
+
+    try:
+
+      do_berry_phase(self)
+
+    except Exception as e:
+      self.report_exception('berry_phase')
+      if attr['abort_on_exception']:
+        raise e
+
+    self.report_module_time('Berry phase')
+

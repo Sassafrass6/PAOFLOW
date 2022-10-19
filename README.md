@@ -2,7 +2,7 @@
 
  Utility to construct and operate on Hamiltonians from the Projections of DFT wfc on Atomic Orbital bases (PAO)
 
- Copyright 2016-2020 - Marco BUONGIORNO NARDELLI (mbn@unt.edu)
+ Copyright 2016-2022 - Marco BUONGIORNO NARDELLI (mbn@unt.edu)
 
  PAOFLOW is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,6 @@
  - Construction of PAO Hamiltonians from the DFT wavefunctions onto pseudo atomic orbitals
  - Construction of PAO Hamiltonians from analytical tight binding models
  - Hamiltonian data for further processing (ACBN0, PAOtransport, etc.)
- - Calculation of the Hubbard-U parameter through the ACBN0 method
  - External fields and non scf ACBN0 correction
  - Spin orbit correction of non SO calculations
  - Bands along standard paths in the BZ
@@ -41,7 +40,8 @@ For installation instructions, see the INSTALL file.
 
  Use of PAOFLOW should reference:
 
-F.T. Cerasoli, A.R. Supka, A. Jayaraj, I. Siloi, M. Costa, J. Slawinska, S. Curtarolo, M. Fornari, D. Ceresoli, and M. Buongiorno Nardelli, Advanced modeling of materials with PAOFLOW 2.0: New features and software design, Comp. Mat. Sci. 200, 110828 (2021).
+ F.T. Cerasoli, A.R. Supka, A. Jayaraj, I. Siloi, M. Costa, J. Slawinska, S. Curtarolo, M. Fornari, D. Ceresoli, and M. Buongiorno Nardelli,
+ Advanced modeling of materials with PAOFLOW 2.0: New features and software design, Comp. Mat. Sci. 200, 110828 (2021).
 
  M. Buongiorno Nardelli, F. T. Cerasoli, M. Costa, S Curtarolo,R. De Gennaro, M. Fornari, L. Liyanage, A. Supka and H. Wang, 
  PAOFLOW: A utility to construct and operate on ab initio Hamiltonians from the Projections of electronic wavefunctions on 

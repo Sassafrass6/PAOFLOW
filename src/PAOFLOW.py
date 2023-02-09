@@ -419,6 +419,22 @@ class PAOFLOW:
 
 
 
+  def minimal(self,R=False):
+      from .defs.do_minimal import do_minimal
+      do_minimal(self.data_controller)
+      if R:
+        from .defs.do_build_pao_hamiltonian import do_Hks_to_HRs
+        do_Hks_to_HRs(self.data_controller)
+        self.data_controller.broadcast_single_array('HRs')
+
+
+
+  def minimal2(self):
+      from .defs.do_minimal import do_minimal2
+      do_minimal2(self.data_controller)
+
+
+
   def add_external_fields ( self, Efield=[0.], Bfield=[0.], HubbardU=[0.] ):
     '''
     Add External Fields and Corrections to the Hamiltonian 'HRs'
@@ -453,7 +469,8 @@ class PAOFLOW:
         raise e
 
     self.comm.Barrier()
-    
+
+
 
   def z2_pack ( self, fname='z2pack_hamiltonian.dat' ):
     '''
@@ -472,6 +489,7 @@ class PAOFLOW:
       self.report_exception('z2_pack')
       if self.data_controller.data_attributes['abort_on_exception']:
         raise e
+
 
 
   def bands ( self, ibrav=None, band_path=None, high_sym_points=None, spin_orbit=False, fname='bands', nk=500 ):
@@ -495,13 +513,13 @@ class PAOFLOW:
 
     arrays,attr = self.data_controller.data_dicts()
 
-    if 'ibrav' not in attr:
-      if ibrav is None and self.rank == 0:
+    if ibrav is not None:
+      attr['ibrav'] = ibrav
+
+    if 'ibrav' not in attr and 'kq' not in arrays:
+      if band_path is None or high_sym_points is None:
         if self.rank == 0:
-          print('Must specify \'ibrav\' in the inputfile or as an optional argument to \'calc_bands\'')
-        quit()
-      else:
-        attr['ibrav'] = ibrav
+          print('Must specify the high-symmetry path, \'kq\', or \'ibrav\'')
 
     if 'nk' not in attr: attr['nk'] = nk
     if band_path is not None: attr['band_path'] = band_path
@@ -527,7 +545,6 @@ class PAOFLOW:
         raise e
 
     self.report_module_time('Bands')
-
 
 
 
